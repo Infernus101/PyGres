@@ -31,6 +31,23 @@ jobs:
           push: true
           tags: ghcr.io/infernus101/pygres:latest
 
-      - name: Trigger Portainer redeploy
+      - name: Redeploy stack in Portainer
         run: |
-          curl -X POST "${{ secrets.PORTAINER_WEBHOOK_URL }}"
+          STACK_ID="${{ secrets.PORTAINER_STACK_ID }}"
+          PORTAINER_URL="${{ secrets.PORTAINER_URL }}"
+          TOKEN="${{ secrets.PORTAINER_TOKEN }}"
+
+          # Get current stack config
+          STACK=$(curl -s -X GET \
+            "${PORTAINER_URL}/api/stacks/${STACK_ID}" \
+            -H "X-API-Key: ${TOKEN}")
+
+          ENV_VARS=$(echo "$STACK" | python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin).get('Env', [])))")
+          COMPOSE=$(echo "$STACK" | python3 -c "import sys,json; print(json.load(sys.stdin).get('StackFileContent', ''))")
+
+          # Trigger redeploy with image pull
+          curl -s -X PUT \
+            "${PORTAINER_URL}/api/stacks/${STACK_ID}?endpointId=3" \
+            -H "X-API-Key: ${TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"stackFileContent\": $(echo "$COMPOSE" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))'), \"env\": ${ENV_VARS}, \"pullImage\": true}"

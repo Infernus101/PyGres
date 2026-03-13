@@ -29,7 +29,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ github.actor }}/pygres:latest
+          tags: ghcr.io/infernus101/pygres:latest
 
       - name: Trigger Portainer redeploy
         run: |

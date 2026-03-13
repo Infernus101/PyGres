@@ -33,21 +33,32 @@ jobs:
 
       - name: Redeploy stack in Portainer
         run: |
-          STACK_ID="${{ secrets.PORTAINER_STACK_ID }}"
-          PORTAINER_URL="${{ secrets.PORTAINER_URL }}"
-          TOKEN="${{ secrets.PORTAINER_TOKEN }}"
+          COMPOSE=$(cat <<'EOF'
+          version: "3.8"
+          services:
+            pygres:
+              image: ghcr.io/infernus101/pygres:latest
+              container_name: pygres
+              restart: unless-stopped
+              environment:
+                DATABASE_URL: $DATABASE_URL
+                API_KEY: $API_KEY
+                DB_POOL_SIZE: "5"
+                DB_MAX_OVERFLOW: "10"
+              cap_drop:
+                - ALL
+              security_opt:
+                - no-new-privileges:true
+              networks:
+                - nginx-proxy-network
+          networks:
+            nginx-proxy-network:
+              external: true
+          EOF
+          )
 
-          # Get current stack config
-          STACK=$(curl -s -X GET \
-            "${PORTAINER_URL}/api/stacks/${STACK_ID}" \
-            -H "X-API-Key: ${TOKEN}")
-
-          ENV_VARS=$(echo "$STACK" | python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin).get('Env', [])))")
-          COMPOSE=$(echo "$STACK" | python3 -c "import sys,json; print(json.load(sys.stdin).get('StackFileContent', ''))")
-
-          # Trigger redeploy with image pull
           curl -s -X PUT \
-            "${PORTAINER_URL}/api/stacks/${STACK_ID}?endpointId=3" \
-            -H "X-API-Key: ${TOKEN}" \
+            "${{ secrets.PORTAINER_URL }}/api/stacks/${{ secrets.PORTAINER_STACK_ID }}?endpointId=3" \
+            -H "X-API-Key: ${{ secrets.PORTAINER_TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d "{\"stackFileContent\": $(echo "$COMPOSE" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))'), \"env\": ${ENV_VARS}, \"pullImage\": true}"
+            -d "{\"stackFileContent\": $(echo "$COMPOSE" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))'), \"env\": [], \"pullImage\": true}"
